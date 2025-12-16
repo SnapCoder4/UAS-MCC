@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1005978999262",
+    "project_id": "aplikasi-gym",
+    "storage_bucket": "aplikasi-gym.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1005978999262:android:88bf03b468e9ce779ba54f",
+        "android_client_info": {
+          "package_name": "com.example.gym"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUOBkXYZm3oWMQZc7Bg2Mi_L6C3uFeyN4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1005978999262:android:638f950e9c1c00379ba54f",
+        "android_client_info": {
+          "package_name": "com.example.gymlife"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUOBkXYZm3oWMQZc7Bg2Mi_L6C3uFeyN4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
