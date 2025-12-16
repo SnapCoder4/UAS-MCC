@@ -44,12 +44,13 @@ class _UserHomeState extends State<UserHome> {
     }
 
     final data = _userDoc!.data() ?? {};
-    final name = data['name'] ?? 'User';
-    final email = data['email'] ?? widget.user.email ?? '';
-    final photoBase64 = data['photoBase64'] ?? "";
+    final String name = data['name'] ?? 'User';
+    final String email = data['email'] ?? widget.user.email ?? '';
+    final String photoBase64 = data['photoBase64'] ?? "";
 
     final pages = [
       _UserDashboard(name: name),
+      const UserNewsPage(),
       const _UserChatPage(),
       _UserSettingsPage(userDoc: _userDoc!, onProfileUpdated: _loadUser),
     ];
@@ -81,9 +82,25 @@ class _UserHomeState extends State<UserHome> {
                     : null,
               ),
             ),
-            const ListTile(
-              leading: Icon(Icons.info_outline),
-              title: Text("Menu user lain (nanti diisi)"),
+            ListTile(
+              leading: const Icon(Icons.dashboard_outlined),
+              title: const Text("Dashboard"),
+              onTap: () => setState(() => _index = 0),
+            ),
+            ListTile(
+              leading: const Icon(Icons.newspaper_outlined),
+              title: const Text("News"),
+              onTap: () => setState(() => _index = 1),
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline),
+              title: const Text("Chat"),
+              onTap: () => setState(() => _index = 2),
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text("Settings"),
+              onTap: () => setState(() => _index = 3),
             ),
           ],
         ),
@@ -92,10 +109,15 @@ class _UserHomeState extends State<UserHome> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
             label: "Dashboard",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.newspaper_outlined),
+            label: "News",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
@@ -119,7 +141,7 @@ class _UserDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        "Halo, $name 💪\nNanti isi fitur user di sini",
+        "Halo, $name 💪\nDashboard user di sini",
         textAlign: TextAlign.center,
       ),
     );
@@ -147,11 +169,9 @@ class _UserSettingsPage extends StatefulWidget {
 
 class _UserSettingsPageState extends State<_UserSettingsPage> {
   bool _saving = false;
-
   late TextEditingController _nameCtrl;
   DateTime? _birthDate;
   String? _gender;
-
   Uint8List? _imageBytes;
   String _photoBase64 = "";
 
@@ -162,11 +182,8 @@ class _UserSettingsPageState extends State<_UserSettingsPage> {
     _nameCtrl = TextEditingController(text: data['name'] ?? '');
     _gender = data['gender'];
     _photoBase64 = data['photoBase64'] ?? "";
-
     final birth = data['birthDate'];
-    if (birth != null) {
-      _birthDate = DateTime.tryParse(birth);
-    }
+    if (birth != null) _birthDate = DateTime.tryParse(birth);
   }
 
   @override
@@ -177,7 +194,6 @@ class _UserSettingsPageState extends State<_UserSettingsPage> {
 
   Future<void> _pickImage() async {
     Uint8List? bytes;
-
     if (Theme.of(context).platform == TargetPlatform.android ||
         Theme.of(context).platform == TargetPlatform.iOS) {
       final picked = await ImagePicker().pickImage(
@@ -194,16 +210,13 @@ class _UserSettingsPageState extends State<_UserSettingsPage> {
       if (result == null) return;
       bytes = result.files.first.bytes;
     }
-
     if (bytes == null) return;
-
     if (bytes.lengthInBytes > 2.5 * 1024 * 1024) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Ukuran foto maksimal 2.5 MB")),
       );
       return;
     }
-
     setState(() => _imageBytes = bytes);
   }
 
@@ -248,28 +261,23 @@ class _UserSettingsPageState extends State<_UserSettingsPage> {
       ).showSnackBar(const SnackBar(content: Text("Data wajib diisi")));
       return;
     }
-
     setState(() => _saving = true);
-
     try {
       String finalBase64 = _photoBase64;
-      if (_imageBytes != null) {
-        finalBase64 = base64Encode(_imageBytes!);
-      }
+      if (_imageBytes != null) finalBase64 = base64Encode(_imageBytes!);
 
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userDoc.id)
-          .update({
+          .set({
             "name": _nameCtrl.text.trim(),
             "birthDate": _birthDate!.toIso8601String(),
             "gender": _gender,
             "photoBase64": finalBase64,
-          });
+          }, SetOptions(merge: true));
 
       _photoBase64 = finalBase64;
       await widget.onProfileUpdated?.call();
-
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -352,6 +360,104 @@ class _UserSettingsPageState extends State<_UserSettingsPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class UserNewsPage extends StatelessWidget {
+  const UserNewsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('news')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs;
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data();
+            final photoBase64 = data['photoBase64'] ?? "";
+            final contentPreview = (data['content'] ?? "").length > 80
+                ? "${(data['content'] ?? "").substring(0, 80)}..."
+                : data['content'] ?? "";
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ListTile(
+                leading: photoBase64.isNotEmpty
+                    ? Image.memory(
+                        base64Decode(photoBase64),
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+                title: Text(data['title'] ?? ""),
+                subtitle: Text(contentPreview),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserNewsDetailPage(
+                        title: data['title'] ?? "",
+                        content: data['content'] ?? "",
+                        photoBase64: photoBase64,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class UserNewsDetailPage extends StatelessWidget {
+  final String title;
+  final String content;
+  final String photoBase64;
+
+  const UserNewsDetailPage({
+    super.key,
+    required this.title,
+    required this.content,
+    required this.photoBase64,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Detail Berita")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (photoBase64.isNotEmpty)
+              Image.memory(
+                base64Decode(photoBase64),
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(content, style: const TextStyle(fontSize: 16)),
+          ],
+        ),
       ),
     );
   }

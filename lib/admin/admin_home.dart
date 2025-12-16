@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'admin_news_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -50,13 +51,14 @@ class _AdminHomeState extends State<AdminHome> {
 
     final pages = [
       _AdminDashboard(name: name),
+      const AdminNewsPage(),
       const _AdminChatPage(),
       _AdminSettingsPage(adminDoc: _adminDoc!, onUpdated: _loadAdmin),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Admin Panel"),
+        title: const Text("Admin"),
         actions: [
           Switch(value: theme.isDarkMode, onChanged: theme.toggleTheme),
           IconButton(
@@ -92,10 +94,15 @@ class _AdminHomeState extends State<AdminHome> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
             label: "Dashboard",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.newspaper_outlined),
+            label: "News",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
@@ -196,7 +203,6 @@ class _AdminSettingsPageState extends State<_AdminSettingsPage> {
       if (result == null) return;
       bytes = result.files.first.bytes;
     }
-
     if (bytes == null) return;
     if (bytes.lengthInBytes > 2.5 * 1024 * 1024) {
       ScaffoldMessenger.of(context).showSnackBar(
