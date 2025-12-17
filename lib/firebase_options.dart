@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBUOBkXYZm3oWMQZc7Bg2Mi_L6C3uFeyN4',
-    appId: '1:1005978999262:android:88bf03b468e9ce779ba54f',
+    appId: '1:1005978999262:android:638f950e9c1c00379ba54f',
     messagingSenderId: '1005978999262',
     projectId: 'aplikasi-gym',
     storageBucket: 'aplikasi-gym.firebasestorage.app',
@@ -60,30 +60,29 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDJSh-houaCibEX5sXJulq9pFpl3hNv1rc',
-    appId: '1:1005978999262:ios:9cf3d95e6a63fe359ba54f',
+    appId: '1:1005978999262:ios:b4e83d3083144d369ba54f',
     messagingSenderId: '1005978999262',
     projectId: 'aplikasi-gym',
     storageBucket: 'aplikasi-gym.firebasestorage.app',
-    iosBundleId: 'com.example.gym',
+    iosBundleId: 'com.example.gymlife',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDJSh-houaCibEX5sXJulq9pFpl3hNv1rc',
-    appId: '1:1005978999262:ios:9cf3d95e6a63fe359ba54f',
+    appId: '1:1005978999262:ios:b4e83d3083144d369ba54f',
     messagingSenderId: '1005978999262',
     projectId: 'aplikasi-gym',
     storageBucket: 'aplikasi-gym.firebasestorage.app',
-    iosBundleId: 'com.example.gym',
+    iosBundleId: 'com.example.gymlife',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyDQYhUXS-YUT7cMIKdHVpugnZUUmD2TxLM',
-    appId: '1:1005978999262:web:e468e71fc34b9ef39ba54f',
+    appId: '1:1005978999262:web:4692e042e82f8fe59ba54f',
     messagingSenderId: '1005978999262',
     projectId: 'aplikasi-gym',
     authDomain: 'aplikasi-gym.firebaseapp.com',
     storageBucket: 'aplikasi-gym.firebasestorage.app',
-    measurementId: 'G-HEHJ5D6QC2',
+    measurementId: 'G-P4CY7S3PDK',
   );
-
 }

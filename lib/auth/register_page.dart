@@ -1,12 +1,11 @@
-import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // <-- Storage
-import 'package:flutter/cupertino.dart';
+import 'login_page.dart';
+import '../services/auth_service.dart';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter/cupertino.dart';
+import '../providers/theme_provider.dart';
 import 'package:image_picker/image_picker.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -17,94 +16,73 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final nameCtrl = TextEditingController();
-  final emailCtrl = TextEditingController();
-  final passCtrl = TextEditingController();
-  final confirmCtrl = TextEditingController();
+  final nameC = TextEditingController();
+  final emailC = TextEditingController();
+  final passC = TextEditingController();
 
-  DateTime? _birthDate;
-  String? _gender; // "L" / "P"
+  bool loading = false;
+  bool showPass = false;
 
-  bool _loading = false;
-  String? _errorMsg;
+  Uint8List? imageBytes;
+  String? imageBase64;
 
-  Uint8List? imageBytes; // dipakai upload ke Storage
-  File? imageFile; // hanya kepakai di Android/iOS buat preview
-
-  final _formKey = GlobalKey<FormState>();
-
-  // untuk icon show / hide password
-  bool _showPass = false;
-  bool _showConfirm = false;
+  String? gender;
+  DateTime? birthDate;
 
   @override
   void dispose() {
-    nameCtrl.dispose();
-    emailCtrl.dispose();
-    passCtrl.dispose();
-    confirmCtrl.dispose();
+    nameC.dispose();
+    emailC.dispose();
+    passC.dispose();
     super.dispose();
   }
 
-  // pilih foto: mobile pakai image_picker, web pakai file_picker
-  Future<void> _pickImage() async {
-    try {
-      if (Theme.of(context).platform == TargetPlatform.android ||
-          Theme.of(context).platform == TargetPlatform.iOS) {
-        final picker = ImagePicker();
-        final XFile? picked = await picker.pickImage(
-          source: ImageSource.gallery,
+  Future<void> pickImage() async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(source: ImageSource.gallery);
+
+    if (picked != null) {
+      final bytes = await picked.readAsBytes();
+
+      if (bytes.lengthInBytes > 1024 * 1024) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Ukuran foto maksimal 1 MB")),
         );
-        if (picked != null) {
-          imageFile = File(picked.path);
-          imageBytes = await picked.readAsBytes();
-          setState(() {});
-        }
-      } else {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.image,
-          withData: true,
-        );
-        if (result != null) {
-          imageBytes = result.files.first.bytes;
-          setState(() {});
-        }
+        return;
       }
-    } catch (e) {
-      debugPrint("Error picking image: $e");
+
+      setState(() {
+        imageBytes = bytes;
+        imageBase64 = base64Encode(bytes);
+      });
     }
   }
 
-  void _pickBirthDate() {
+  void pickBirthDate() {
     showModalBottomSheet(
       context: context,
       builder: (_) {
-        DateTime temp = _birthDate ?? DateTime(2004, 1, 1);
-        return Container(
+        DateTime temp = birthDate ?? DateTime(2004, 1, 1);
+        return SizedBox(
           height: 250,
-          padding: const EdgeInsets.all(8),
           child: Column(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _birthDate = temp);
-                      Navigator.pop(context);
-                    },
-                    child: const Text("Pilih"),
-                  ),
-                ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    setState(() => birthDate = temp);
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Pilih"),
+                ),
               ),
               Expanded(
                 child: CupertinoDatePicker(
                   mode: CupertinoDatePickerMode.date,
                   initialDateTime: temp,
                   maximumDate: DateTime.now(),
-                  onDateTimeChanged: (d) {
-                    temp = d;
-                  },
+                  onDateTimeChanged: (d) => temp = d,
                 ),
               ),
             ],
@@ -114,346 +92,292 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_birthDate == null) {
-      setState(() => _errorMsg = "Tanggal lahir wajib dipilih");
-      return;
-    }
-    if (_gender == null) {
-      setState(() => _errorMsg = "Jenis kelamin wajib dipilih");
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _errorMsg = null;
-    });
-
-    try {
-      // 1. buat akun di Firebase Auth
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailCtrl.text.trim(),
-        password: passCtrl.text.trim(),
-      );
-
-      final uid = cred.user!.uid;
-
-      // 2. upload foto ke Firebase Storage (kalau user pilih foto)
-      String photoUrl = "";
-      if (imageBytes != null) {
-        // batasi ukuran, misal maksimal 2 MB
-        if (imageBytes!.lengthInBytes > 2 * 1024 * 1024) {
-          setState(() {
-            _loading = false;
-            _errorMsg = "Ukuran foto terlalu besar (maksimal 2 MB).";
-          });
-          return;
-        }
-
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('profile_photos')
-            .child('$uid.jpg');
-
-        await ref.putData(
-          imageBytes!,
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
-
-        photoUrl = await ref.getDownloadURL();
-      }
-
-      // 3. simpan profil di Firestore
-      //    NOTE: nama field masih "photoBase64" supaya kompatibel
-      //    tapi isinya SEKARANG URL foto, bukan string base64 lagi.
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        "email": emailCtrl.text.trim(),
-        "name": nameCtrl.text.trim(),
-        "gender": _gender,
-        "birthDate": _birthDate!.toIso8601String(),
-        "photoBase64": photoUrl, // <--- sekarang berisi URL, aman & kecil
-        "role": "user",
-        "createdAt": Timestamp.now(),
-      });
-
-      if (!mounted) return;
-
-      // 4. logout dulu lalu kembali ke login
-      await FirebaseAuth.instance.signOut();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Akun berhasil dibuat"),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.all(12),
-        ),
-      );
-
-      Navigator.pop(context);
-    } on FirebaseAuthException catch (e) {
-      debugPrint("FirebaseAuthException: ${e.code} - ${e.message}");
-
-      String msg = "Registrasi gagal.";
-
-      if (e.code == 'email-already-in-use') {
-        msg = "Email sudah terdaftar, silakan login.";
-      } else if (e.code == 'invalid-email') {
-        msg = "Format email tidak valid.";
-      } else if (e.code == 'weak-password') {
-        msg = "Password terlalu lemah (minimal 6 karakter).";
-      } else {
-        msg = e.message ?? "Terjadi kesalahan saat registrasi.";
-      }
-
-      setState(() => _errorMsg = msg);
-    } catch (e, st) {
-      debugPrint("Error register: $e");
-      debugPrintStack(stackTrace: st);
-      setState(() => _errorMsg = "Terjadi kesalahan, coba lagi.");
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final blue = const Color(0xFF2563EB);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+
+    final bgColor = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subTextColor = isDark ? Colors.white70 : Colors.black54;
+    final fieldFill = isDark ? Colors.grey[850] : Colors.grey[200];
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final buttonColor = isDark ? Colors.grey[900] : Colors.black;
+    final buttonTextColor = Colors.white;
+
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Registrasi"),
-        backgroundColor: blue,
-        foregroundColor: Colors.white,
-      ),
-      body: SafeArea(
+      backgroundColor: bgColor,
+      body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           child: Column(
             children: [
-              if (_errorMsg != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
+              Image.asset(
+                'assets/images/gymlife.png',
+                height: size.height * 0.18,
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: pickImage,
+                child: CircleAvatar(
+                  radius: 48,
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: imageBytes != null
+                      ? MemoryImage(imageBytes!)
+                      : null,
+                  child: imageBytes == null
+                      ? const Icon(Icons.camera_alt, size: 30)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                "Create Your Account 💪",
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "Daftar untuk mulai keanggotaan gym Anda",
+                style: TextStyle(color: subTextColor),
+              ),
+              const SizedBox(height: 28),
+              _CustomField(
+                controller: nameC,
+                label: "Nama Lengkap",
+                icon: Icons.person_outline,
+                fillColor: fieldFill,
+                iconColor: iconColor,
+                textColor: textColor,
+              ),
+              const SizedBox(height: 16),
+              _CustomField(
+                controller: emailC,
+                label: "Email",
+                icon: Icons.email_outlined,
+                fillColor: fieldFill,
+                iconColor: iconColor,
+                textColor: textColor,
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: pickBirthDate,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: "Tanggal Lahir",
+                    filled: true,
+                    fillColor: fieldFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.error_outline, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMsg!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
+                      Text(
+                        birthDate == null
+                            ? "Pilih tanggal lahir"
+                            : "${birthDate!.day.toString().padLeft(2, '0')}-"
+                                  "${birthDate!.month.toString().padLeft(2, '0')}-"
+                                  "${birthDate!.year}",
+                        style: TextStyle(color: textColor),
                       ),
+                      Icon(Icons.calendar_month, color: iconColor),
                     ],
                   ),
                 ),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    // Foto
-                    Center(
-                      child: Column(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(60),
-                            child: Container(
-                              width: 120,
-                              height: 120,
-                              color: Colors.grey[200],
-                              child: imageBytes != null
-                                  ? Image.memory(imageBytes!, fit: BoxFit.cover)
-                                  : imageFile != null
-                                  ? Image.file(imageFile!, fit: BoxFit.cover)
-                                  : const Icon(
-                                      Icons.person,
-                                      size: 60,
-                                      color: Colors.grey,
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton.icon(
-                            onPressed: _pickImage,
-                            icon: const Icon(Icons.image),
-                            label: const Text("Pilih Foto"),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: nameCtrl,
-                      decoration: InputDecoration(
-                        labelText: "Nama",
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? "Nama wajib diisi" : null,
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: emailCtrl,
-                      decoration: InputDecoration(
-                        labelText: "Email",
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? "Email wajib diisi" : null,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // tanggal lahir
-                    InkWell(
-                      onTap: _pickBirthDate,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: "Tanggal Lahir",
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _birthDate == null
-                                  ? "Pilih tanggal, bulan, tahun"
-                                  : "${_birthDate!.day.toString().padLeft(2, '0')}-"
-                                        "${_birthDate!.month.toString().padLeft(2, '0')}-"
-                                        "${_birthDate!.year}",
-                            ),
-                            const Icon(Icons.calendar_month_outlined),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // gender
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        "Jenis Kelamin",
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        ChoiceChip(
-                          label: const Text("Laki-laki"),
-                          selected: _gender == "L",
-                          shape: const StadiumBorder(),
-                          onSelected: (_) => setState(() => _gender = "L"),
-                        ),
-                        const SizedBox(width: 8),
-                        ChoiceChip(
-                          label: const Text("Perempuan"),
-                          selected: _gender == "P",
-                          shape: const StadiumBorder(),
-                          onSelected: (_) => setState(() => _gender = "P"),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: passCtrl,
-                      obscureText: !_showPass,
-                      decoration: InputDecoration(
-                        labelText: "Password",
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _showPass
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                          ),
-                          onPressed: () =>
-                              setState(() => _showPass = !_showPass),
-                        ),
-                      ),
-                      validator: (v) => v == null || v.length < 6
-                          ? "Minimal 6 karakter"
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: confirmCtrl,
-                      obscureText: !_showConfirm,
-                      decoration: InputDecoration(
-                        labelText: "Konfirmasi Password",
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _showConfirm
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                          ),
-                          onPressed: () =>
-                              setState(() => _showConfirm = !_showConfirm),
-                        ),
-                      ),
-                      validator: (v) =>
-                          v != passCtrl.text ? "Password tidak sama" : null,
-                    ),
-                    const SizedBox(height: 20),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: blue,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                        child: _loading
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                "Buat Akun",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Jenis Kelamin",
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text("Laki-laki"),
+                    selected: gender == "L",
+                    onSelected: (_) => setState(() => gender = "L"),
+                  ),
+                  const SizedBox(width: 10),
+                  ChoiceChip(
+                    label: const Text("Perempuan"),
+                    selected: gender == "P",
+                    onSelected: (_) => setState(() => gender = "P"),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _CustomField(
+                controller: passC,
+                label: "Password",
+                obscure: !showPass,
+                icon: Icons.lock_outline,
+                suffix: IconButton(
+                  icon: Icon(
+                    showPass ? Icons.visibility_off : Icons.visibility,
+                    color: iconColor,
+                  ),
+                  onPressed: () => setState(() => showPass = !showPass),
+                ),
+                fillColor: fieldFill,
+                iconColor: iconColor,
+                textColor: textColor,
+              ),
+              const SizedBox(height: 28),
+              loading
+                  ? const CircularProgressIndicator()
+                  : SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: buttonColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: () async {
+                          if (nameC.text.isEmpty ||
+                              emailC.text.isEmpty ||
+                              passC.text.isEmpty ||
+                              gender == null ||
+                              birthDate == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Semua field wajib diisi"),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setState(() => loading = true);
+
+                          final error = await auth.registerUser(
+                            name: nameC.text.trim(),
+                            email: emailC.text.trim(),
+                            password: passC.text.trim(),
+                            gender: gender!,
+                            birthDate: birthDate!,
+                            photoBase64: imageBase64 ?? "",
+                          );
+
+                          setState(() => loading = false);
+
+                          if (error != null) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(error)));
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Registrasi berhasil, silakan login",
+                                ),
+                              ),
+                            );
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LoginPage(),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          "REGISTER",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            color: buttonTextColor,
+                          ),
+                        ),
+                      ),
+                    ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Sudah punya akun GymLife?",
+                    style: TextStyle(color: subTextColor),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                      );
+                    },
+                    child: Text(
+                      "Login sekarang",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool obscure;
+  final Widget? suffix;
+  final Color? fillColor;
+  final Color? iconColor;
+  final Color? textColor;
+
+  const _CustomField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.obscure = false,
+    this.suffix,
+    this.fillColor,
+    this.iconColor,
+    this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      style: TextStyle(color: textColor),
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: iconColor),
+        suffixIcon: suffix,
+        labelText: label,
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
     );

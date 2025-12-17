@@ -1,49 +1,26 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
+import 'services/auth_service.dart';
 import 'providers/theme_provider.dart';
+
 import 'auth/login_page.dart';
 import 'admin/admin_home.dart';
 import 'user/user_home.dart';
 
-/// Key global buat snackBar (nanti bisa dipakai di mana saja)
-final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
-    GlobalKey<ScaffoldMessengerState>();
-
-Future<String?> getUserRole(String uid) async {
-  // Cek dulu di koleksi admins
-  final adminDoc = await FirebaseFirestore.instance
-      .collection('admins')
-      .doc(uid)
-      .get();
-  if (adminDoc.exists) return "admin";
-
-  // Kalau bukan admin, cek users
-  final userDoc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .get();
-  if (userDoc.exists) return "user";
-
-  return null;
-}
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e, st) {
-    // Kalau ada masalah saat init Firebase, kelihatan di console
-    debugPrint("Error init Firebase: $e");
-    debugPrintStack(stackTrace: st);
-  }
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Fix: LocaleDataException for DateFormat('id_ID')
+  await initializeDateFormatting('id_ID', null);
+  Intl.defaultLocale = 'id_ID';
 
   runApp(const GymApp());
 }
@@ -53,92 +30,97 @@ class GymApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(
-        builder: (context, theme, _) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'Gym App',
-            scaffoldMessengerKey: rootScaffoldMessengerKey,
-            themeMode: theme.themeMode,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-              useMaterial3: true,
-            ),
-            darkTheme: ThemeData.dark().copyWith(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.blue,
-                brightness: Brightness.dark,
-              ),
-            ),
-
-            // route utama tetap AuthGate
-            home: const AuthGate(),
-
-            // optional: named routes kalau nanti mau dipakai
-            routes: {
-              '/login': (_) => const LoginPage(),
-              // route ini biasanya dipakai setelah AuthGate cek role
-              '/admin': (ctx) {
-                final user = FirebaseAuth.instance.currentUser;
-                if (user == null) return const LoginPage();
-                return AdminHome(user: user);
-              },
-              '/user': (ctx) {
-                final user = FirebaseAuth.instance.currentUser;
-                if (user == null) return const LoginPage();
-                return UserHome(user: user);
-              },
-            },
-          );
-        },
-      ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: const RootApp(),
     );
   }
 }
 
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+class RootApp extends StatelessWidget {
+  const RootApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+
+          // Optional tapi bagus biar locale widget/material ikut Indonesia
+          locale: const Locale('id', 'ID'),
+          supportedLocales: const [Locale('id', 'ID'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+
+          themeMode: themeProvider.themeMode,
+          theme: ThemeData(
+            brightness: Brightness.light,
+            primarySwatch: Colors.blue,
+            scaffoldBackgroundColor: Colors.white,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              elevation: 1,
+            ),
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            primarySwatch: Colors.blue,
+            scaffoldBackgroundColor: Colors.black,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              elevation: 1,
+            ),
+          ),
+          home: const RootRouter(),
+        );
+      },
+    );
+  }
+}
+
+class RootRouter extends StatelessWidget {
+  const RootRouter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context, listen: false);
+
+    return StreamBuilder<AuthState>(
+      stream: auth.authState,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        if (!snap.hasData) {
+        final state = snapshot.data!;
+
+        if (!state.signedIn) {
           return const LoginPage();
         }
 
-        final user = snap.data!;
-        return FutureBuilder<String?>(
-          future: getUserRole(user.uid),
-          builder: (context, roleSnap) {
-            if (roleSnap.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
+        final currentUser = auth.user;
+        if (currentUser == null) {
+          return const Scaffold(
+            body: Center(child: Text('Error: User not found')),
+          );
+        }
 
-            if (!roleSnap.hasData) {
-              // user login tapi belum punya data di admins/users
-              return const LoginPage();
-            }
-
-            final role = roleSnap.data;
-            if (role == "admin") {
-              return AdminHome(user: user);
-            } else {
-              return UserHome(user: user);
-            }
-          },
-        );
+        if (state.isAdmin) {
+          return AdminHome(user: currentUser);
+        } else {
+          return UserHome(user: currentUser);
+        }
       },
     );
   }

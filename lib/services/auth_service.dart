@@ -1,107 +1,84 @@
-// lib/services/auth_service.dart
-import 'dart:typed_data';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class AuthService with ChangeNotifier {
+class AuthState {
+  final bool signedIn;
+  final bool isAdmin;
+
+  AuthState({required this.signedIn, required this.isAdmin});
+}
+
+class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// stream perubahan status login (kalau mau dipakai di tempat lain)
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  final _controller = StreamController<AuthState>.broadcast();
+  Stream<AuthState> get authState => _controller.stream;
 
-  User? get currentUser => _auth.currentUser;
+  AuthService() {
+    _auth.authStateChanges().listen((user) async {
+      if (user == null) {
+        _controller.add(AuthState(signedIn: false, isAdmin: false));
+        return;
+      }
 
-  /// REGISTER USER BARU + upload foto ke Firebase Storage + simpan profil di Firestore
-  ///
-  /// return:
-  ///   - `null`  -> sukses
-  ///   - `String` -> pesan error untuk ditampilkan ke user
-  Future<String?> registerUser(
-    String name,
-    String email,
-    String password,
-    Uint8List? photoBytes,
-  ) async {
+      final uid = user.uid;
+
+      final adminDoc = await _firestore.collection('admins').doc(uid).get();
+      final isAdmin = adminDoc.exists;
+
+      _controller.add(AuthState(signedIn: true, isAdmin: isAdmin));
+    });
+  }
+
+  Future<String?> registerUser({
+    required String name,
+    required String email,
+    required String password,
+    required String gender,
+    required DateTime birthDate,
+    String photoBase64 = "",
+  }) async {
     try {
-      // 1. Buat akun di Firebase Auth
       final cred = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      final uid = cred.user!.uid;
-
-      // 2. Upload foto ke Storage (kalau ada)
-      String photoUrl = "";
-      if (photoBytes != null) {
-        // batasi ukuran, misal maksimal 2 MB
-        if (photoBytes.lengthInBytes > 2 * 1024 * 1024) {
-          return "Ukuran foto terlalu besar (maksimal 2 MB).";
-        }
-
-        final ref = _storage.ref().child('profile_photos').child('$uid.jpg');
-
-        await ref.putData(
-          photoBytes,
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
-
-        photoUrl = await ref.getDownloadURL();
-      }
-
-      // 3. Simpan data user di Firestore (koleksi `users`)
-      await _db.collection('users').doc(uid).set({
+      await _firestore.collection('users').doc(cred.user!.uid).set({
         'name': name,
         'email': email,
-        'photoUrl': photoUrl, // URL dari Firebase Storage
-        'role': 'user', // biar cocok sama AuthGate-mu
+        'gender': gender,
+        'birthDate': birthDate.toIso8601String(),
+        'photoBase64': photoBase64,
+        'role': 'user',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      return null; // sukses
+      return null;
     } on FirebaseAuthException catch (e) {
-      // error spesifik dari Firebase Auth
-      if (e.code == 'email-already-in-use') {
-        return "Email sudah terdaftar, silakan login.";
-      } else if (e.code == 'invalid-email') {
-        return "Format email tidak valid.";
-      } else if (e.code == 'weak-password') {
-        return "Password terlalu lemah (minimal 6 karakter).";
-      }
-
-      return e.message ?? "Terjadi kesalahan saat registrasi.";
-    } catch (e, st) {
-      debugPrint("Register error: $e");
-      debugPrintStack(stackTrace: st);
-      return "Terjadi kesalahan, coba lagi.";
+      return e.message;
+    } catch (e) {
+      return e.toString();
     }
   }
 
-  /// LOGIN
   Future<String?> login(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      return null; // sukses
+      return null;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        return "Akun tidak ditemukan.";
-      } else if (e.code == 'wrong-password') {
-        return "Password salah.";
-      }
-      return e.message ?? "Gagal login.";
+      return e.message;
     } catch (e) {
-      debugPrint("Login error: $e");
-      return "Terjadi kesalahan, coba lagi.";
+      return e.toString();
     }
   }
 
-  /// LOGOUT
   Future<void> logout() async {
     await _auth.signOut();
   }
+
+  User? get user => _auth.currentUser;
 }
