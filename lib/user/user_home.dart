@@ -1,14 +1,18 @@
 import 'dart:convert';
-import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart';
-import '../providers/theme_provider.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'user_membership_page.dart';
+import 'user_chat_page.dart';
+import 'user_settings_page.dart';
+
+// Feature pages (dummy/real sesuai file kamu)
+import '../features/workouts_page.dart';
+import '../features/nutrition_page.dart';
+import '../features/class_schedule_page.dart';
+import '../features/personal_trainer_page.dart';
 
 class UserHome extends StatefulWidget {
   final User user;
@@ -33,13 +37,14 @@ class _UserHomeState extends State<UserHome> {
         .collection('users')
         .doc(widget.user.uid)
         .get();
+
     if (mounted) setState(() => _userDoc = snap);
   }
 
+  void _goTo(int i) => setState(() => _index = i);
+
   @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<ThemeProvider>(context);
-
     if (_userDoc == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -50,18 +55,17 @@ class _UserHomeState extends State<UserHome> {
     final String photoBase64 = data['photoBase64'] ?? "";
 
     final pages = [
-      _UserDashboard(name: name, userId: widget.user.uid),
+      _UserDashboard(name: name, userId: widget.user.uid, onNavigate: _goTo),
       const UserNewsPage(),
       const UserMembershipPage(),
-      const _UserChatPage(),
-      _UserSettingsPage(userDoc: _userDoc!, onProfileUpdated: _loadUser),
+      const UserChatPage(),
+      UserSettingsPage(userDoc: _userDoc!, onUpdated: _loadUser),
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Gym App"),
         actions: [
-          Switch(value: theme.isDarkMode, onChanged: theme.toggleTheme),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async => FirebaseAuth.instance.signOut(),
@@ -89,7 +93,7 @@ class _UserHomeState extends State<UserHome> {
               title: const Text("Dashboard"),
               onTap: () {
                 Navigator.pop(context);
-                setState(() => _index = 0);
+                _goTo(0);
               },
             ),
             ListTile(
@@ -97,7 +101,7 @@ class _UserHomeState extends State<UserHome> {
               title: const Text("Berita"),
               onTap: () {
                 Navigator.pop(context);
-                setState(() => _index = 1);
+                _goTo(1);
               },
             ),
             ListTile(
@@ -105,7 +109,7 @@ class _UserHomeState extends State<UserHome> {
               title: const Text("Membership"),
               onTap: () {
                 Navigator.pop(context);
-                setState(() => _index = 2);
+                _goTo(2);
               },
             ),
             ListTile(
@@ -113,7 +117,7 @@ class _UserHomeState extends State<UserHome> {
               title: const Text("Chat"),
               onTap: () {
                 Navigator.pop(context);
-                setState(() => _index = 3);
+                _goTo(3);
               },
             ),
             ListTile(
@@ -121,7 +125,7 @@ class _UserHomeState extends State<UserHome> {
               title: const Text("Pengaturan"),
               onTap: () {
                 Navigator.pop(context);
-                setState(() => _index = 4);
+                _goTo(4);
               },
             ),
           ],
@@ -130,7 +134,7 @@ class _UserHomeState extends State<UserHome> {
       body: pages[_index],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        onTap: _goTo,
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
@@ -162,7 +166,13 @@ class _UserHomeState extends State<UserHome> {
 class _UserDashboard extends StatelessWidget {
   final String name;
   final String userId;
-  const _UserDashboard({required this.name, required this.userId});
+  final void Function(int index) onNavigate;
+
+  const _UserDashboard({
+    required this.name,
+    required this.userId,
+    required this.onNavigate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -203,6 +213,7 @@ class _UserDashboard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ===== Welcome Card =====
               Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(
@@ -210,11 +221,11 @@ class _UserDashboard extends StatelessWidget {
                 ),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     gradient: LinearGradient(
-                      colors: [Colors.blue[700]!, Colors.blue[900]!],
+                      colors: [Colors.blue.shade700, Colors.blue.shade900],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -225,16 +236,16 @@ class _UserDashboard extends StatelessWidget {
                       const Text(
                         "Selamat Datang! 💪",
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
                         name,
                         style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           color: Colors.white70,
                         ),
                       ),
@@ -242,16 +253,19 @@ class _UserDashboard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 18),
+
+              // ===== Membership =====
               const Text(
                 "Status Membership",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -261,18 +275,18 @@ class _UserDashboard extends StatelessWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.2),
+                              color: statusColor.withOpacity(0.12),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
                               Icons.card_membership,
                               color: statusColor,
-                              size: 32,
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,27 +294,17 @@ class _UserDashboard extends StatelessWidget {
                                 Text(
                                   membershipType,
                                   style: const TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.circle,
-                                      size: 8,
-                                      color: statusColor,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      membershipStatus,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: statusColor,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
+                                const SizedBox(height: 2),
+                                Text(
+                                  membershipStatus,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ],
                             ),
@@ -308,37 +312,20 @@ class _UserDashboard extends StatelessWidget {
                         ],
                       ),
                       if (expiryDate != null) ...[
-                        const Divider(height: 24),
+                        const Divider(height: 22),
                         Text(
                           "Berlaku hingga: ${expiryDate.day}-${expiryDate.month}-${expiryDate.year}",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
+                          style: TextStyle(color: Colors.grey.shade600),
                         ),
                       ],
                       if (membershipType == "Belum ada") ...[
-                        const Divider(height: 24),
+                        const Divider(height: 22),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () {
-                              // Navigate to membership page
-                              final homeState = context
-                                  .findAncestorStateOfType<_UserHomeState>();
-                              if (homeState != null) {
-                                homeState.setState(() {
-                                  homeState._index = 2;
-                                });
-                              }
-                            },
+                            onPressed: () => onNavigate(2),
                             icon: const Icon(Icons.add_card),
                             label: const Text("Beli Membership"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
                           ),
                         ),
                       ],
@@ -346,12 +333,16 @@ class _UserDashboard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+
+              const SizedBox(height: 22),
+
+              // ===== Feature Cards =====
               const Text(
                 "Fitur Gym",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -360,28 +351,58 @@ class _UserDashboard extends StatelessWidget {
                 mainAxisSpacing: 12,
                 children: [
                   _FeatureCard(
+                    icon: Icons.schedule,
+                    title: "Jadwal Kelas",
+                    subtitle: "Lihat kelas minggu ini",
+                    color: Colors.purple,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ClassSchedulePage(),
+                        ),
+                      );
+                    },
+                  ),
+                  _FeatureCard(
                     icon: Icons.fitness_center,
                     title: "Latihan",
+                    subtitle: "Program latihan harian",
                     color: Colors.orange,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WorkoutsPage()),
+                      );
+                    },
                   ),
                   _FeatureCard(
                     icon: Icons.restaurant_menu,
                     title: "Nutrisi",
+                    subtitle: "Menu & rekomendasi",
                     color: Colors.green,
-                    onTap: () {},
-                  ),
-                  _FeatureCard(
-                    icon: Icons.schedule,
-                    title: "Jadwal Kelas",
-                    color: Colors.purple,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NutritionPage(),
+                        ),
+                      );
+                    },
                   ),
                   _FeatureCard(
                     icon: Icons.person_outline,
                     title: "Personal Trainer",
+                    subtitle: "Pilih trainer terbaik",
                     color: Colors.red,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PersonalTrainerPage(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -396,37 +417,64 @@ class _UserDashboard extends StatelessWidget {
 class _FeatureCard extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String subtitle;
   final Color color;
   final VoidCallback onTap;
 
   const _FeatureCard({
     required this.icon,
     required this.title,
+    required this.subtitle,
     required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 48, color: color),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
               const SizedBox(height: 12),
               Text(
                 title,
-                textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: scheme.onSurface.withOpacity(0.65),
+                ),
+              ),
+              const Spacer(),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Icon(
+                  Icons.chevron_right,
+                  color: scheme.onSurface.withOpacity(0.45),
                 ),
               ),
             ],
@@ -437,222 +485,7 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-class _UserChatPage extends StatelessWidget {
-  const _UserChatPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text("Halaman Chat User"));
-  }
-}
-
-class _UserSettingsPage extends StatefulWidget {
-  final DocumentSnapshot<Map<String, dynamic>> userDoc;
-  final Future<void> Function()? onProfileUpdated;
-
-  const _UserSettingsPage({required this.userDoc, this.onProfileUpdated});
-
-  @override
-  State<_UserSettingsPage> createState() => _UserSettingsPageState();
-}
-
-class _UserSettingsPageState extends State<_UserSettingsPage> {
-  bool _saving = false;
-  late TextEditingController _nameCtrl;
-  DateTime? _birthDate;
-  String? _gender;
-  Uint8List? _imageBytes;
-  String _photoBase64 = "";
-
-  @override
-  void initState() {
-    super.initState();
-    final data = widget.userDoc.data() ?? {};
-    _nameCtrl = TextEditingController(text: data['name'] ?? '');
-    _gender = data['gender'];
-    _photoBase64 = data['photoBase64'] ?? "";
-    final birth = data['birthDate'];
-    if (birth != null) _birthDate = DateTime.tryParse(birth);
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickImage() async {
-    Uint8List? bytes;
-    if (Theme.of(context).platform == TargetPlatform.android ||
-        Theme.of(context).platform == TargetPlatform.iOS) {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (picked == null) return;
-      bytes = await picked.readAsBytes();
-    } else {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true,
-      );
-      if (result == null) return;
-      bytes = result.files.first.bytes;
-    }
-    if (bytes == null) return;
-    if (bytes.lengthInBytes > 2.5 * 1024 * 1024) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Ukuran foto maksimal 2.5 MB")),
-      );
-      return;
-    }
-    setState(() => _imageBytes = bytes);
-  }
-
-  void _pickBirthDate() {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) {
-        DateTime temp = _birthDate ?? DateTime(2004, 1, 1);
-        return SizedBox(
-          height: 250,
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    setState(() => _birthDate = temp);
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Pilih"),
-                ),
-              ),
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date,
-                  initialDateTime: temp,
-                  maximumDate: DateTime.now(),
-                  onDateTimeChanged: (d) => temp = d,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _save() async {
-    if (_nameCtrl.text.isEmpty || _birthDate == null || _gender == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Data wajib diisi")));
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      String finalBase64 = _photoBase64;
-      if (_imageBytes != null) finalBase64 = base64Encode(_imageBytes!);
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userDoc.id)
-          .set({
-            "name": _nameCtrl.text.trim(),
-            "birthDate": _birthDate!.toIso8601String(),
-            "gender": _gender,
-            "photoBase64": finalBase64,
-          }, SetOptions(merge: true));
-
-      _photoBase64 = finalBase64;
-      await widget.onProfileUpdated?.call();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Profil berhasil diupdate")));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(60),
-            child: SizedBox(
-              width: 120,
-              height: 120,
-              child: _imageBytes != null
-                  ? Image.memory(_imageBytes!, fit: BoxFit.cover)
-                  : _photoBase64.isNotEmpty
-                  ? Image.memory(base64Decode(_photoBase64), fit: BoxFit.cover)
-                  : const Icon(Icons.person, size: 60),
-            ),
-          ),
-          TextButton.icon(
-            onPressed: _pickImage,
-            icon: const Icon(Icons.image),
-            label: const Text("Ubah Foto"),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _nameCtrl,
-            decoration: const InputDecoration(
-              labelText: "Nama",
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: _pickBirthDate,
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: "Tanggal Lahir",
-                border: OutlineInputBorder(),
-              ),
-              child: Text(
-                _birthDate == null
-                    ? "Pilih tanggal"
-                    : "${_birthDate!.day}-${_birthDate!.month}-${_birthDate!.year}",
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              ChoiceChip(
-                label: const Text("Laki-laki"),
-                selected: _gender == "L",
-                onSelected: (_) => setState(() => _gender = "L"),
-              ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text("Perempuan"),
-                selected: _gender == "P",
-                onSelected: (_) => setState(() => _gender = "P"),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const CircularProgressIndicator()
-                  : const Text("Simpan Perubahan"),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ==================== NEWS (tetap seperti punyamu) ====================
 
 class UserNewsPage extends StatelessWidget {
   const UserNewsPage({super.key});
@@ -665,18 +498,23 @@ class UserNewsPage extends StatelessWidget {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
+
         final docs = snapshot.data!.docs;
+
         return ListView.builder(
           padding: const EdgeInsets.all(8),
           itemCount: docs.length,
           itemBuilder: (context, index) {
             final data = docs[index].data();
             final photoBase64 = data['photoBase64'] ?? "";
-            final contentPreview = (data['content'] ?? "").length > 80
-                ? "${(data['content'] ?? "").substring(0, 80)}..."
-                : data['content'] ?? "";
+            final content = data['content'] ?? "";
+            final preview = content.length > 80
+                ? "${content.substring(0, 80)}..."
+                : content;
+
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: ListTile(
@@ -689,14 +527,14 @@ class UserNewsPage extends StatelessWidget {
                       )
                     : null,
                 title: Text(data['title'] ?? ""),
-                subtitle: Text(contentPreview),
+                subtitle: Text(preview),
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => UserNewsDetailPage(
                         title: data['title'] ?? "",
-                        content: data['content'] ?? "",
+                        content: content,
                         photoBase64: photoBase64,
                       ),
                     ),

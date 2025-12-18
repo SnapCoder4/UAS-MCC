@@ -1,9 +1,8 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
-// Amanin data Firestore yang kadang bukan array (mis. String).
 List<String> asStringList(dynamic value) {
   if (value == null) return [];
 

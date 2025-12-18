@@ -1,7 +1,7 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
 class UserMembershipPage extends StatefulWidget {
   const UserMembershipPage({super.key});
@@ -21,8 +21,6 @@ class _UserMembershipPageState extends State<UserMembershipPage> {
     symbol: 'Rp ',
     decimalDigits: 2,
   );
-
-  /// Amanin data Firestore yang kadang bukan array (mis. string "lolol").
   List<String> _asStringList(dynamic value) {
     if (value == null) return [];
 
@@ -36,7 +34,6 @@ class _UserMembershipPageState extends State<UserMembershipPage> {
     if (value is String) {
       final v = value.trim();
       if (v.isEmpty) return [];
-      // Kalau tersimpan "a, b, c" di Firestore
       if (v.contains(',')) {
         return v
             .split(',')
@@ -47,7 +44,6 @@ class _UserMembershipPageState extends State<UserMembershipPage> {
       return [v];
     }
 
-    // Fallback: apapun jadi string
     return [value.toString()];
   }
 
@@ -499,8 +495,6 @@ class _UserMembershipPageState extends State<UserMembershipPage> {
       );
     }
 
-    // Guard: kadang doc membership ada tapi field tanggal belum lengkap.
-    // Biar nggak crash (null check operator used on a null value).
     if (_expiryDate == null) {
       return Card(
         elevation: 3,
