@@ -2,15 +2,22 @@ import 'user/user_home.dart';
 import 'auth/login_page.dart';
 import 'firebase_options.dart';
 import 'admin/admin_home.dart';
+import 'package:intl/intl.dart';
 import 'services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'providers/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initializeDateFormatting('id_ID', null);
+  Intl.defaultLocale = 'id_ID';
+
   runApp(const GymApp());
 }
 
@@ -38,6 +45,15 @@ class RootApp extends StatelessWidget {
       builder: (context, themeProvider, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
+
+          locale: const Locale('id', 'ID'),
+          supportedLocales: const [Locale('id', 'ID'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+
           themeMode: themeProvider.themeMode,
           theme: ThemeData(
             brightness: Brightness.light,
@@ -91,7 +107,7 @@ class RootRouter extends StatelessWidget {
         final currentUser = auth.user;
         if (currentUser == null) {
           return const Scaffold(
-            body: Center(child: Text("Error: User not found")),
+            body: Center(child: Text('Error: User not found')),
           );
         }
 

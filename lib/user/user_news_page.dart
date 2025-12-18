@@ -42,12 +42,17 @@ class UserNewsPage extends StatelessWidget {
                     : const Icon(Icons.newspaper),
                 title: Text(title),
                 subtitle: Text(
-                  content.length > 50 ? "${content.substring(0, 50)}..." : content,
+                  content.length > 50
+                      ? "${content.substring(0, 50)}..."
+                      : content,
                 ),
                 trailing: createdAt != null
                     ? Text(
                         "${createdAt.day}-${createdAt.month}-${createdAt.year}",
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       )
                     : null,
                 onTap: () {
@@ -107,10 +112,7 @@ class UserNewsDetailPage extends StatelessWidget {
                 style: const TextStyle(color: Colors.grey),
               ),
             const SizedBox(height: 12),
-            Text(
-              content,
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text(content, style: const TextStyle(fontSize: 16)),
           ],
         ),
       ),
