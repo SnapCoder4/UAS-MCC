@@ -17,14 +17,14 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
   Uint8List? _imageBytes;
   bool _saving = false;
 
+  // ================= PICK IMAGE =================
   Future<void> _pickImage() async {
-    Uint8List? bytes;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       withData: true,
     );
     if (result == null) return;
-    bytes = result.files.first.bytes;
+    final bytes = result.files.first.bytes;
     if (bytes == null) return;
 
     if (bytes.lengthInBytes > 2.5 * 1024 * 1024) {
@@ -37,6 +37,7 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
     setState(() => _imageBytes = bytes);
   }
 
+  // ================= ADD NEWS =================
   Future<void> _saveNews() async {
     if (_titleCtrl.text.isEmpty || _contentCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -48,10 +49,9 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
     setState(() => _saving = true);
 
     try {
-      String photoBase64 = "";
-      if (_imageBytes != null) {
-        photoBase64 = base64Encode(_imageBytes!);
-      }
+      String photoBase64 = _imageBytes != null
+          ? base64Encode(_imageBytes!)
+          : "";
 
       await FirebaseFirestore.instance.collection('news').add({
         "title": _titleCtrl.text.trim(),
@@ -72,8 +72,83 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
     }
   }
 
+  // ================= DELETE NEWS =================
   Future<void> _deleteNews(String docId) async {
     await FirebaseFirestore.instance.collection('news').doc(docId).delete();
+  }
+
+  // ================= EDIT NEWS =================
+  Future<void> _editNews(String docId, Map<String, dynamic> data) async {
+    _titleCtrl.text = data['title'] ?? '';
+    _contentCtrl.text = data['content'] ?? '';
+    _imageBytes = (data['photoBase64'] != null && data['photoBase64'] != "")
+        ? base64Decode(data['photoBase64'])
+        : null;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Edit Berita"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _titleCtrl,
+                decoration: const InputDecoration(labelText: "Title"),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _contentCtrl,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: "Content"),
+              ),
+              const SizedBox(height: 8),
+              if (_imageBytes != null)
+                Image.memory(_imageBytes!, height: 120, fit: BoxFit.cover),
+              TextButton.icon(
+                onPressed: _pickImage,
+                icon: const Icon(Icons.image),
+                label: const Text("Pilih Foto"),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              String photoBase64 = _imageBytes != null
+                  ? base64Encode(_imageBytes!)
+                  : "";
+
+              await FirebaseFirestore.instance
+                  .collection('news')
+                  .doc(docId)
+                  .update({
+                    "title": _titleCtrl.text.trim(),
+                    "content": _contentCtrl.text.trim(),
+                    "photoBase64": photoBase64,
+                  });
+
+              _titleCtrl.clear();
+              _contentCtrl.clear();
+              _imageBytes = null;
+              if (mounted) setState(() {});
+
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Berita berhasil diupdate")),
+              );
+            },
+            child: const Text("Simpan"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -82,6 +157,7 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
+          // FORM TAMBAH NEWS
           TextField(
             controller: _titleCtrl,
             decoration: const InputDecoration(
@@ -117,6 +193,7 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
             ),
           ),
           const Divider(),
+          // LIST BERITA
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('news')
@@ -152,9 +229,18 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
                           : const Icon(Icons.image_not_supported),
                       title: Text(data['title'] ?? ''),
                       subtitle: Text(data['content'] ?? ''),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteNews(doc.id),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => _editNews(doc.id, data),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _deleteNews(doc.id),
+                          ),
+                        ],
                       ),
                     ),
                   );

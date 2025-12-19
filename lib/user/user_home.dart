@@ -3,9 +3,16 @@ import 'user_chat_page.dart';
 import 'user_settings_page.dart';
 import 'user_membership_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
+import '../features/workouts_page.dart';
+import '../features/nutrition_page.dart';
+import '../features/class_schedule_page.dart';
+import '../features/personal_trainer_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+
+
+// Feature pages (dummy/real sesuai file kamu)
 
 class UserHome extends StatefulWidget {
   final User user;
@@ -30,8 +37,11 @@ class _UserHomeState extends State<UserHome> {
         .collection('users')
         .doc(widget.user.uid)
         .get();
+
     if (mounted) setState(() => _userDoc = snap);
   }
+
+  void _goTo(int i) => setState(() => _index = i);
 
   @override
   Widget build(BuildContext context) {
@@ -40,16 +50,12 @@ class _UserHomeState extends State<UserHome> {
     }
 
     final data = _userDoc!.data() ?? {};
-    final name = data['name'] ?? 'User';
-    final email = data['email'] ?? widget.user.email ?? '';
-    final photoBase64 = data['photoBase64'] ?? "";
+    final String name = data['name'] ?? 'User';
+    final String email = data['email'] ?? widget.user.email ?? '';
+    final String photoBase64 = data['photoBase64'] ?? "";
 
     final pages = [
-      _UserDashboard(
-        name: name,
-        userId: widget.user.uid,
-        onNavigate: (i) => setState(() => _index = i),
-      ),
+      _UserDashboard(name: name, userId: widget.user.uid, onNavigate: _goTo),
       const UserNewsPage(),
       const UserMembershipPage(),
       const UserChatPage(),
@@ -82,18 +88,53 @@ class _UserHomeState extends State<UserHome> {
                     : null,
               ),
             ),
-            _drawerItem(0, "Dashboard", Icons.dashboard_outlined),
-            _drawerItem(1, "Berita", Icons.newspaper_outlined),
-            _drawerItem(2, "Membership", Icons.card_membership),
-            _drawerItem(3, "Chat", Icons.chat_bubble_outline),
-            _drawerItem(4, "Pengaturan", Icons.settings_outlined),
+            ListTile(
+              leading: const Icon(Icons.dashboard_outlined),
+              title: const Text("Dashboard"),
+              onTap: () {
+                Navigator.pop(context);
+                _goTo(0);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.newspaper_outlined),
+              title: const Text("Berita"),
+              onTap: () {
+                Navigator.pop(context);
+                _goTo(1);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.card_membership),
+              title: const Text("Membership"),
+              onTap: () {
+                Navigator.pop(context);
+                _goTo(2);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline),
+              title: const Text("Chat"),
+              onTap: () {
+                Navigator.pop(context);
+                _goTo(3);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text("Pengaturan"),
+              onTap: () {
+                Navigator.pop(context);
+                _goTo(4);
+              },
+            ),
           ],
         ),
       ),
       body: pages[_index],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        onTap: _goTo,
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
@@ -118,17 +159,6 @@ class _UserHomeState extends State<UserHome> {
           ),
         ],
       ),
-    );
-  }
-
-  ListTile _drawerItem(int i, String title, IconData icon) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      onTap: () {
-        Navigator.pop(context);
-        setState(() => _index = i);
-      },
     );
   }
 }
@@ -164,6 +194,7 @@ class _UserDashboard extends StatelessWidget {
           if (expiry != null) {
             expiryDate = expiry.toDate();
             final daysLeft = expiryDate.difference(DateTime.now()).inDays;
+
             if (daysLeft < 0) {
               membershipStatus = "Kadaluarsa";
               statusColor = Colors.red;
@@ -182,6 +213,7 @@ class _UserDashboard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ===== Welcome Card =====
               Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(
@@ -189,11 +221,13 @@ class _UserDashboard extends StatelessWidget {
                 ),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     gradient: LinearGradient(
-                      colors: [Colors.blue[700]!, Colors.blue[900]!],
+                      colors: [Colors.blue.shade700, Colors.blue.shade900],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                   ),
                   child: Column(
@@ -202,16 +236,16 @@ class _UserDashboard extends StatelessWidget {
                       const Text(
                         "Selamat Datang! 💪",
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
                         name,
                         style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           color: Colors.white70,
                         ),
                       ),
@@ -219,40 +253,73 @@ class _UserDashboard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 18),
+
+              // ===== Membership =====
               const Text(
                 "Status Membership",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        membershipType,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        membershipStatus,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.card_membership,
+                              color: statusColor,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  membershipType,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  membershipStatus,
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                       if (expiryDate != null) ...[
-                        const Divider(),
+                        const Divider(height: 22),
                         Text(
                           "Berlaku hingga: ${expiryDate.day}-${expiryDate.month}-${expiryDate.year}",
+                          style: TextStyle(color: Colors.grey.shade600),
                         ),
                       ],
                       if (membershipType == "Belum ada") ...[
-                        const Divider(),
+                        const Divider(height: 22),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
@@ -266,6 +333,79 @@ class _UserDashboard extends StatelessWidget {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 22),
+
+              // ===== Feature Cards =====
+              const Text(
+                "Fitur Gym",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                children: [
+                  _FeatureCard(
+                    icon: Icons.schedule,
+                    title: "Jadwal Kelas",
+                    subtitle: "Lihat kelas minggu ini",
+                    color: Colors.purple,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ClassSchedulePage(),
+                        ),
+                      );
+                    },
+                  ),
+                  _FeatureCard(
+                    icon: Icons.fitness_center,
+                    title: "Latihan",
+                    subtitle: "Program latihan harian",
+                    color: Colors.orange,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WorkoutsPage()),
+                      );
+                    },
+                  ),
+                  _FeatureCard(
+                    icon: Icons.restaurant_menu,
+                    title: "Nutrisi",
+                    subtitle: "Menu & rekomendasi",
+                    color: Colors.green,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NutritionPage(),
+                        ),
+                      );
+                    },
+                  ),
+                  _FeatureCard(
+                    icon: Icons.person_outline,
+                    title: "Personal Trainer",
+                    subtitle: "Pilih trainer terbaik",
+                    color: Colors.red,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PersonalTrainerPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
         );
@@ -273,6 +413,79 @@ class _UserDashboard extends StatelessWidget {
     );
   }
 }
+
+class _FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: scheme.onSurface.withOpacity(0.65),
+                ),
+              ),
+              const Spacer(),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Icon(
+                  Icons.chevron_right,
+                  color: scheme.onSurface.withOpacity(0.45),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== NEWS (tetap seperti punyamu) ====================
 
 class UserNewsPage extends StatelessWidget {
   const UserNewsPage({super.key});
